@@ -1,0 +1,63 @@
+name: Build and Deploy Java Application with Docker  # 工作流程名称
+
+on:  # 触发条件
+  push:
+    branches:
+      - master
+
+jobs:  # 工作任务
+  build:  # 构建任务
+    runs-on: ubuntu-latest  # 在 Ubuntu 最新版本上运行
+    environment: docker  # 指定环境为 Docker
+
+    steps:  # 执行步骤
+    - name: Checkout repository  # 检出仓库
+      uses: actions/checkout@v2  # 使用 GitHub 官方提供的 checkout 动作
+
+    - name: Set up JDK 17  # 配置 JDK 17
+      uses: actions/setup-java@v2  # 使用 GitHub 官方提供的 setup-java 动作
+      with:
+        distribution: 'adopt'
+        java-version: '17'  # 使用 AdoptOpenJDK 提供的 JDK 17
+
+    - name: Cache Maven packages  # 缓存 Maven 依赖
+      uses: actions/cache@v2  # 使用 GitHub 官方提供的 cache 动作
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+
+    - name: Clean and install dependencies  # 清理并安装依赖
+      run: mvn clean install  # 运行 Maven 指令进行清理和安装依赖
+
+    - name: Package application  # 打包应用程序
+      run: mvn package -DskipTests  # 运行 Maven 指令进行打包（跳过测试）
+
+    - name: Set up Docker Buildx  # 配置 Docker Buildx
+      uses: docker/setup-buildx-action@v1  # 使用 Docker 官方提供的 setup-buildx 动作
+
+    - name: Cache Docker layers  # 缓存 Docker 层
+      uses: actions/cache@v2  # 使用 GitHub 官方提供的 cache 动作
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
+    - name: Log in to Docker Hub  # 登录到 Docker Hub
+      uses: docker/login-action@v2  # 使用 Docker 官方提供的 login-action 动作
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}  # 使用 GitHub 密钥管理器中存储的 Docker 用户名
+        password: ${{ secrets.DOCKER_PASSWORD }}  # 使用 GitHub 密钥管理器中存储的 Docker 密码
+
+    - name: Build and push Docker image  # 构建并推送 Docker 镜像
+      uses: docker/build-push-action@v2  # 使用 Docker 官方提供的 build-push-action 动作
+      with:
+        context: .  # 使用当前上下文
+        file: ./Dockerfile  # 指定 Dockerfile 路径
+        push: true  # 执行推送操作
+        tags: 1320503154lhg/dbbackend:latest  # 将 your-repo-name 替换为您的仓库名称
+
+    - name: Logout from Docker Hub  # 从 Docker Hub 注销
+      run: docker logout  # 运行 Docker 命令注销登录
